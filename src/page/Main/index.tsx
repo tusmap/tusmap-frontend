@@ -2,11 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { Container, Map } from './styled';
 import { io } from 'socket.io-client';
 import { TopSearchBar } from '@/components';
-import { useSetRecoilState } from 'recoil';
+import { useRecoilState, useSetRecoilState } from 'recoil';
 import { originAtom, idAtom } from '@/states';
 
 import LocationMarker from '@/assets/location.svg';
 import { useSearchParams } from 'react-router-dom';
+import { currentLocAtom } from '@/states/current';
 
 function aAlert(msg: string) {
   try {
@@ -22,12 +23,12 @@ export const Main: React.FC = () => {
   const { kakao } = window as any;
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const setOrigin = useSetRecoilState(originAtom);
+  const [origin, setOrigin] = useRecoilState(originAtom);
   const setId = useSetRecoilState(idAtom);
+  const [currentLoc, setCurrentLoc] = useRecoilState(currentLocAtom);
   const [currentLocationMarker, setCurrentLocationMarker] = useState<any>();
   const [destinationMarker, setDestinationMarker] = useState<any>();
   const [maps, setMap] = useState<any>();
-  const [currentLoc, setCurrentLoc] = useState<Array<number>>([]);
   const geocoder = new kakao.maps.services.Geocoder();
 
   const id = useSearchParams()[0].get('id');
@@ -86,13 +87,16 @@ export const Main: React.FC = () => {
 
   useEffect(() => {
     const map = new (window as any).kakao.maps.Map(containerRef.current, {
-      center: new kakao.maps.LatLng(37.342331, 126.830149),
+      center: currentLoc
+        ? new kakao.maps.LatLng(currentLoc[0], currentLoc[1])
+        : new kakao.maps.LatLng(37.342331, 126.830149),
       level: 3,
     });
     setMap(map);
     setId(id as string);
     socket.emit('join', id);
-    socket.on('setPosition', (data) => {
+
+    const currentLocMarker = (data: any) => {
       if (currentLocationMarker) currentLocationMarker.setMap(null);
       const imageSize = new kakao.maps.Size(26, 26);
       const imageOption = { offset: new kakao.maps.Point(13, 13) };
@@ -117,7 +121,15 @@ export const Main: React.FC = () => {
 
       marker.setMap(map);
       setCurrentLocationMarker(marker);
-    });
+    };
+
+    socket.on('setPosition', currentLocMarker);
+
+    if (currentLoc)
+      currentLocMarker({
+        latitude: currentLoc[0],
+        longitude: currentLoc[1],
+      });
   }, []);
 
   useEffect(() => {
@@ -157,24 +169,33 @@ export const Main: React.FC = () => {
         .catch((err) => aAlert(`오류/${err}`));
     };
     try {
-      if (currentLocationMarker) {
+      if (currentLocationMarker && currentLoc) {
         kakao.maps.event.removeListener(maps, 'click', clickEvent);
         kakao.maps.event.addListener(maps, 'click', clickEvent);
 
-        geocoder.coord2Address(currentLoc[1], currentLoc[0], (result: any, status: any) => {
-          if (status === kakao.maps.services.Status.OK) {
-            geocoder.addressSearch(result[0].road_address.address_name, (nameResult: any, nameStatus: any) => {
-              if (nameStatus === kakao.maps.services.Status.OK) {
-                setOrigin({
-                  addressName: result[0].road_address.address_name,
-                  buildingName: result[0].road_address.building_name,
-                  x: nameResult[0].x,
-                  y: nameResult[0].y,
-                })
+        if (!origin)
+          geocoder.coord2Address(
+            currentLoc[1],
+            currentLoc[0],
+            (result: any, status: any) => {
+              if (status === kakao.maps.services.Status.OK) {
+                geocoder.addressSearch(
+                  result[0].road_address.address_name,
+                  (nameResult: any, nameStatus: any) => {
+                    if (nameStatus === kakao.maps.services.Status.OK) {
+                      console.log(nameResult);
+                      setOrigin({
+                        addressName: result[0].road_address.address_name,
+                        buildingName: result[0].road_address.building_name,
+                        x: nameResult[0].x,
+                        y: nameResult[0].y,
+                      });
+                    }
+                  }
+                );
               }
-            });
-          }
-        });
+            }
+          );
       }
     } catch (e) {}
   }, [currentLocationMarker, maps, currentLoc]);

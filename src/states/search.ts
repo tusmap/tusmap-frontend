@@ -1,6 +1,6 @@
 import { atom } from 'recoil';
 
-interface Place {
+export interface Place {
   buildingName: string;
   addressName: string;
   x: number;
