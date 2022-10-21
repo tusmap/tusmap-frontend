@@ -2,12 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { Container, Map } from './styled';
 import { io } from 'socket.io-client';
 import { TopSearchBar } from '@/components';
-import { useRecoilState, useSetRecoilState } from 'recoil';
-import { originAtom, idAtom } from '@/states';
+import { useRecoilState, useRecoilValue, useSetRecoilState } from 'recoil';
+import { originAtom, idAtom, currentLocAtom, destinationAtom } from '@/states';
 
 import LocationMarker from '@/assets/location.svg';
 import { useSearchParams } from 'react-router-dom';
-import { currentLocAtom } from '@/states/current';
 
 function aAlert(msg: string) {
   try {
@@ -27,9 +26,11 @@ export const Main: React.FC = () => {
   const setId = useSetRecoilState(idAtom);
   const [currentLoc, setCurrentLoc] = useRecoilState(currentLocAtom);
   const [currentLocationMarker, setCurrentLocationMarker] = useState<any>();
-  const [destinationMarker, setDestinationMarker] = useState<any>();
   const [maps, setMap] = useState<any>();
   const geocoder = new kakao.maps.services.Geocoder();
+
+  const originPlace = useRecoilValue(originAtom);
+  const destinationPlace = useRecoilValue(destinationAtom);
 
   const id = useSearchParams()[0].get('id');
 
@@ -67,6 +68,7 @@ export const Main: React.FC = () => {
         }
       }
     }
+    maps.setLevel(7);
   }
 
   function callMapObjApiAJAX(mapObj: any) {
@@ -133,32 +135,17 @@ export const Main: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const clickEvent = (mouseEvent: any) => {
-      const latlng = mouseEvent.latLng;
-      if (!destinationMarker) {
-        const dm = new kakao.maps.Marker({
-          position: new kakao.maps.LatLng(latlng.getLat(), latlng.getLng()),
-        });
-        setDestinationMarker(dm);
-
-        dm.setMap(maps);
-      } else destinationMarker.setPosition(latlng);
-
-      if (!currentLocationMarker)
-        return aAlert('위치 실패/현재 위치 불러오기 실패');
-
-      const currentPosition = currentLocationMarker.getPosition();
-
+    if (originPlace && destinationPlace && maps) {
       fetch(`${import.meta.env.VITE_API_URL}/api/searchTransPath`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          SX: currentPosition.getLng(),
-          SY: currentPosition.getLat(),
-          EX: latlng.getLng(),
-          EY: latlng.getLat(),
+          SX: originPlace.x,
+          SY: originPlace.y,
+          EX: destinationPlace.x,
+          EY: destinationPlace.y,
         }),
       })
         .then((response) => response.json())
@@ -167,12 +154,12 @@ export const Main: React.FC = () => {
           callMapObjApiAJAX(data.data['result']['path'][0].info.mapObj);
         })
         .catch((err) => aAlert(`오류/${err}`));
-    };
+    }
+  }, [originPlace, destinationPlace, maps]);
+
+  useEffect(() => {
     try {
       if (currentLocationMarker && currentLoc) {
-        kakao.maps.event.removeListener(maps, 'click', clickEvent);
-        kakao.maps.event.addListener(maps, 'click', clickEvent);
-
         if (!origin)
           geocoder.coord2Address(
             currentLoc[1],
@@ -183,7 +170,6 @@ export const Main: React.FC = () => {
                   result[0].road_address.address_name,
                   (nameResult: any, nameStatus: any) => {
                     if (nameStatus === kakao.maps.services.Status.OK) {
-                      console.log(nameResult);
                       setOrigin({
                         addressName: result[0].road_address.address_name,
                         buildingName: result[0].road_address.building_name,
