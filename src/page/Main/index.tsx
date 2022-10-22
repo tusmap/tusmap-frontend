@@ -69,6 +69,7 @@ export const Main: React.FC = () => {
       }
     }
     maps.setLevel(7);
+    maps.setCenter(new kakao.maps.LatLng(originPlace?.y, originPlace?.x));
   }
 
   function callMapObjApiAJAX(mapObj: any) {
