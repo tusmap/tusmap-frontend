@@ -25,7 +25,8 @@ export const Main: React.FC = () => {
   const [origin, setOrigin] = useRecoilState(originAtom);
   const setId = useSetRecoilState(idAtom);
   const [currentLoc, setCurrentLoc] = useRecoilState(currentLocAtom);
-  const [currentLocationMarker, setCurrentLocationMarker] = useState<any>();
+  // const [currentLocationMarker, setCurrentLocationMarker] = useState<any>();
+  let currentLocationMarker: any;
   const [maps, setMap] = useState<any>();
   const geocoder = new kakao.maps.services.Geocoder();
 
@@ -123,7 +124,7 @@ export const Main: React.FC = () => {
       map.panTo(new kakao.maps.LatLng(data.latitude, data.longitude));
 
       marker.setMap(map);
-      setCurrentLocationMarker(marker);
+      currentLocationMarker = marker;
     };
 
     socket.on('setPosition', currentLocMarker);
@@ -168,12 +169,18 @@ export const Main: React.FC = () => {
             (result: any, status: any) => {
               if (status === kakao.maps.services.Status.OK) {
                 geocoder.addressSearch(
-                  result[0].road_address.address_name,
+                  result[0].road_address
+                    ? result[0].road_address.address_name
+                    : result[0].address.address_name,
                   (nameResult: any, nameStatus: any) => {
                     if (nameStatus === kakao.maps.services.Status.OK) {
                       setOrigin({
-                        addressName: result[0].road_address.address_name,
-                        buildingName: result[0].road_address.building_name,
+                        addressName: result[0].road_address
+                          ? result[0].road_address.address_name
+                          : result[0].address.address_name,
+                        buildingName: result[0].road_address
+                          ? result[0].road_address.building_name
+                          : result[0].address.address_name,
                         x: nameResult[0].x,
                         y: nameResult[0].y,
                       });
